@@ -5,14 +5,23 @@
   <!-- Include the CesiumJS JavaScript and CSS files -->
   <script src="https://cesium.com/downloads/cesiumjs/releases/1.107.1/Build/Cesium/Cesium.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/satellite.js/4.0.0/satellite.min.js"></script>
+  <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.min.js" type="text/javascript"></script>
+
   <link href="https://cesium.com/downloads/cesiumjs/releases/1.107.1/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
 </head>
 <body>
-  <div id="loading">
-    <h1>Loading...</h1>
-  </div>
+
   <div id="cesiumContainer"></div>
+
+  <li id="data"></li>
+  <li id="data-satellitejs"></li>
+
   <script type="module">
+
+    function r2d(radians, n) {
+      const num = radians * (180 / Math.PI);
+      return Math.round(num * Math.pow(10, n)) / Math.pow(10, n)
+    }
 
     Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiI4ZjM0YTMzOC04NTIwLTQwMTItYTg5Ni0wOTFhNjlkZTJiYzIiLCJpZCI6MTUzNzcwLCJpYXQiOjE2ODkyNjg2NjV9.JHjxyoN8RovBonODf3w6B654ZNhxvoqCbAqAsKZrxBY'
     const viewer = new Cesium.Viewer('cesiumContainer', {
@@ -22,8 +31,8 @@
     // Your access token can be found at: https://ion.cesium.com/tokens.
     // This is the default access token from your ion account
     const ISS_TLE = 
-    `1 25544U 98067A   23196.11847764  .00010804  00000+0  19874-3 0  9993
-    2 25544  51.6412 190.1160 0000345  59.2509  58.9376 15.49748527406124`
+`    1 44804U 19081A   23196.35840878  .00005378  00000+0  25694-3 0  9994
+2 44804  97.3450 253.5493 0009838 278.3489  81.6631 15.19397374201298 `
 
 
     const satrec = satellite.twoline2satrec(
@@ -32,7 +41,7 @@
     );
 
 
-    const totalSeconds = 60 * 60 * 6;
+    const totalSeconds = 60 * 94.8 * 1.5;
     const timestepInSeconds = 10;
     const start = Cesium.JulianDate.fromDate(new Date());
     const stop = Cesium.JulianDate.addSeconds(start, totalSeconds, new Cesium.JulianDate());
@@ -40,7 +49,7 @@
     viewer.clock.stopTime = stop.clone();
     viewer.clock.currentTime = start.clone();
     viewer.timeline.zoomTo(start, stop);
-    viewer.clock.multiplier = 40;
+    //viewer.clock.multiplier = 40;
     viewer.clock.clockRange = Cesium.ClockRange.LOOP_STOP;
     
     const positionsOverTime = new Cesium.SampledPositionProperty();
@@ -51,19 +60,27 @@
       const positionAndVelocity = satellite.propagate(satrec, jsDate);
       const gmst = satellite.gstime(jsDate);
       const p   = satellite.eciToGeodetic(positionAndVelocity.position, gmst);
-
+      
       const position = Cesium.Cartesian3.fromRadians(p.longitude, p.latitude, p.height * 1000);
+
+      
       positionsOverTime.addSample(time, position);
+     
     }
     
-    // Visualize the satellite with a red dot.
-    const satellitePoint = viewer.entities.add({
+    const orbit = viewer.entities.add({
+      availability: new Cesium.TimeIntervalCollection([ new Cesium.TimeInterval({start: start, stop: stop}) ]),
       position: positionsOverTime,
-      point: { pixelSize: 10, color: Cesium.Color.RED }
+      point: {pixelSize: 30, color: Cesium.Color.YELLOW },
+      path: new Cesium.PathGraphics({ width: 3})
     });
 
+    
+    // Visualize the satellite with a red dot.
+
+
     // Set the camera to follow the satellite 
-    {% comment %} viewer.trackedEntity = satellitePoint; {% endcomment %}
+    {% comment %} viewer.trackedEntity = orbit; {% endcomment %}
     // Wait for globe to load then zoom out     
     let initialized = false;
     viewer.scene.globe.tileLoadProgressEvent.addEventListener(() => {
@@ -71,9 +88,44 @@
         viewer.clock.shouldAnimate = true;
         initialized = true;
         viewer.scene.camera.zoomOut(7000000);
-        document.querySelector("#loading").classList.toggle('disappear', true)
+
       }
     });
+
+
+    const timeID = setInterval(get_live_data, 1000);
+
+   
+
+    function get_live_data() {
+      const div_data = document.getElementById('data');
+      const div_satellitejs = document.getElementById('data-satellitejs');
+
+      const time_now = Cesium.JulianDate.fromDate(new Date());
+      const jsDate_now = Cesium.JulianDate.toDate(time_now);
+
+      const positionAndVelocity = satellite.propagate(satrec, jsDate_now);
+      const gmst = satellite.gstime(jsDate_now);
+      const p   = satellite.eciToGeodetic(positionAndVelocity.position, gmst);
+
+      div_satellitejs.innerHTML = `latitude : ${r2d(p.latitude, 2)}, longitude: ${r2d(p.longitude,2 )}, height: ${Math.round(p.height *100)/100}, UTC: ${time_now.toString().slice(11, 19)}`;
+
+
+      $.ajax({
+        url: "{% url 'data' %}",
+        type: "GET",
+        dataType: "json",
+        success: (data) => {
+          div_data.innerHTML = `latitude : ${data.context.lat}, longitude: ${data.context.lon}, height: ${data.context.height}, UTC: ${data.context.time}`;
+          //console.log(data.context);
+        },
+        error: (error) => {
+          console.log(error);
+        }
+      });
+      
+    }
+
     const scene = viewer.scene;
     const clock = viewer.clock;
     
@@ -81,7 +133,7 @@ function icrf(scene, time) {
   if (scene.mode !== Cesium.SceneMode.SCENE3D) {
     return;
   }
-
+  
   const icrfToFixed = Cesium.Transforms.computeIcrfToFixedMatrix(time);
   if (Cesium.defined(icrfToFixed)) {
     const camera = viewer.camera;
@@ -90,6 +142,10 @@ function icrf(scene, time) {
       icrfToFixed
     );
     camera.lookAtTransform(transform, offset);
+    
+    {% comment %} let pointInInertial = new Cesium.Cartesian3();
+    pointEntity.position._value = Cesium.Matrix3.multiplyByVector(icrfToFixed, fixedPoint, new Cesium.Cartesian3());      {% endcomment %}
+  
   }
 }
 
@@ -97,11 +153,12 @@ function viewInICRF() {
   
   viewer.camera.flyHome(0);
 
-  clock.multiplier = 3 * 60 * 60;
+  //clock.multiplier = 3 * 60;
   scene.postUpdate.addEventListener(icrf);
   
 }
-viewInICRF();
+//viewInICRF();
+
 
 
 
