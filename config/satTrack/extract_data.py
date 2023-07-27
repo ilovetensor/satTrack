@@ -23,7 +23,6 @@ def line1_data(line1, save_dict):
 def line2_data(line2, save_dict):
     save_dict['inclination'] = line2[8: 16]
     save_dict['RAAN'] = line2[17: 25]
-    print(save_dict['RAAN'])
     save_dict['longitude_of_ascending_node'] = round((float(save_dict['RAAN']) * np.pi)/180, 2)
     save_dict['eccentricity'] = '0.'+line2[26: 33]
     save_dict['argument of perigee'] = line2[34: 41]
@@ -78,29 +77,44 @@ def convert(TLE_FILE = "tle.txt"):
 
     return dataframe, save_dict
 
-# loading satellite parameters using skyfield
+
+def load_satellite(TLE):
+    load = Loader('~/Documents/fishing/SkyData')
+    ts = load.timescale() 
+    L1, L2 = TLE.splitlines()
+    SATELLITE = EarthSatellite(L1, L2)
+    return SATELLITE, ts
 
 
 def get_live_data(TLE):
-    load = Loader('~/Documents/fishing/SkyData')
-    data = load('de421.bsp')
-    ts = load.timescale() 
+    SATELLITE, ts = load_satellite(TLE)
 
-    planets = load('de421.bsp')
-    earth = planets['earth']
-
-    ts = load.timescale()
-    minutes = np.arange(0, 240, 2)
-    
-
-    L1, L2 = TLE.splitlines()
-    CARTO_Geo = EarthSatellite(L1, L2)
-    print(CARTO_Geo.epoch.utc_jpl())
     time = ts.now()
-    geocentric = CARTO_Geo.at(time)
+    geocentric = SATELLITE.at(time)
     lat, lon = wgs84.latlon_of(geocentric)
     h = wgs84.height_of(geocentric)
     time_str = f"{time.utc.hour}: {time.utc.minute}: {int(time.utc.second)}"
-    position = {'lat': round(lat.degrees, 2), 'lon': round(lon.degrees, 2), 'height': round(h.km, 2), 'time': time_str}
-    
+    position = {'lat': round(lat.degrees, 2),
+                'lon': round(lon.degrees, 2), 
+                'height': round(h.km, 2), 
+                'time': time_str }
     return position
+
+def data_over_time(TLE, minutes_to_project=94):
+    SATELLITE, ts = load_satellite(TLE)
+
+    now = ts.now()
+    minutes = np.arange(now.utc.minute, now.utc.minute + (minutes_to_project), 2)
+    time_scale = ts.utc(now.utc.year, now.utc.month, now.utc.day, now.utc.hour, minutes, now.utc.second)
+
+    geocentric = SATELLITE.at(time_scale)
+    lat, lon = wgs84.latlon_of(geocentric)
+    h = wgs84.height_of(geocentric)
+
+    buffer = {}
+    i = 0
+    for j,k,l,m in zip(lat.degrees, lon.degrees, h.km, time_scale):
+        buffer[i] = {'latitude':j, 'longitude': k, 'height': l, 'iso_string': m.utc_iso()}
+        i+=1
+        
+    return buffer
