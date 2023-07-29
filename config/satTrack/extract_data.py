@@ -6,6 +6,17 @@ from skyfield.api import EarthSatellite, Loader
 from skyfield.api import load, wgs84
 import matplotlib.pyplot as plt 
 import math
+import requests
+
+api_key = 'M8PZCZ-5ELM7M-DE5LRK-531A'
+API_URL = 'https://api.n2yo.com/rest/v1/satellite/'
+params = {'apiKey': api_key}
+def get_tle_from_n2yo(id):
+        r = requests.get(
+            f'{API_URL}tle/{id}',
+            params=params
+        ).json()
+        return r['tle']
 
 
 def cal_semi_major_axis(n):
@@ -15,6 +26,7 @@ def cal_semi_major_axis(n):
     return round((num/deno)/1000, 3)
     
 def line1_data(line1, save_dict):
+    save_dict['norad_id'] = line1[2: 7]
     save_dict['launch_year'] = line1[9: 11]
     save_dict['first_derivative_mean_motion'] = line1[33: 43]
     save_dict['second_derivative_mean_motion'] = line1[44: 52]
@@ -32,50 +44,15 @@ def line2_data(line2, save_dict):
     save_dict['semi_major_axis']= cal_semi_major_axis(float(save_dict['mean_motion']))
     save_dict['period'] = round(1440/(float(save_dict['mean_motion'])), 1)
 
-def convert(TLE_FILE = "tle.txt"):
+def convert(TLE):
     save_dict = {}
-    TLEs = open(TLE_FILE, 'r')
-    L_Name = []
-    L_1 = []
-    L_2 = []
-    i = 1
-    for line in TLEs:
-        j = i
-        if i == 1:
-            line= line.replace('\n','')
-            L_Name.append(line)
-            name = line.strip()
-            save_dict[name] = {}
-            j = 2
-        elif i == 2:
-            L_1.append(line[:69])
-            line1_data(line, save_dict[name])
-            j = 3
-        elif i == 3:
-            L_2.append(line[:69])
-            line2_data(line, save_dict[name])
-            j = 1
-        i = j
-    dataframe = pd.DataFrame(columns = ['Satellite_name', 'Line_1', 'Line_2', 'Position_vector', 'Speed_vector']) 
-    dataframe.Satellite_name = L_Name
-    dataframe.Line_1 = L_1
-    dataframe.Line_2 = L_2
-    jd, fr = jday(2021, 2, 4, 18, 5, 0)
-    L_PosVector = []
-    L_SpeedVector = []
-    for i in range(len(dataframe)):
+    L1, L2 = TLE.splitlines()
+    line1_data(L1, save_dict)
+    line2_data(L2, save_dict)
+    save_dict['L1'] = L1
+    save_dict['L2'] = L2
     
-        s = dataframe.Line_1[i]
-        t = dataframe.Line_2[i]
-        satellite = Satrec.twoline2rv(s, t)
-        e, r, v = satellite.sgp4(jd, fr)
-        L_PosVector.append(r)
-        L_SpeedVector.append(v)
-
-    dataframe.Position_vector = L_PosVector
-    dataframe.Speed_vector = L_SpeedVector
-
-    return dataframe, save_dict
+    return save_dict
 
 
 def load_satellite(TLE):
@@ -85,19 +62,35 @@ def load_satellite(TLE):
     SATELLITE = EarthSatellite(L1, L2)
     return SATELLITE, ts
 
+def get_azimuth_altitude_distance_ra_dec(SATELLITE, time, cur_loc):
+    bluffton = wgs84.latlon(float(cur_loc['lat']), float(cur_loc['lon']))
+    difference = SATELLITE - bluffton
+    topocentric = difference.at(time)
+    alt, az, distance = topocentric.altaz()
+    ra, dec, distance = topocentric.radec()
+    return (alt, az, distance, ra, dec)
 
-def get_live_data(TLE):
+def get_live_data(TLE, cur_loc):
     SATELLITE, ts = load_satellite(TLE)
-
     time = ts.now()
+    alt, az, distance, ra, dec = get_azimuth_altitude_distance_ra_dec(SATELLITE, time, cur_loc)
+
     geocentric = SATELLITE.at(time)
+    v = geocentric.velocity.km_per_s
+    speed = math.sqrt(v[0]**2 + v[1]**2 + v[2]**2)
     lat, lon = wgs84.latlon_of(geocentric)
     h = wgs84.height_of(geocentric)
     time_str = f"{time.utc.hour}: {time.utc.minute}: {int(time.utc.second)}"
     position = {'lat': round(lat.degrees, 2),
                 'lon': round(lon.degrees, 2), 
                 'height': round(h.km, 2), 
-                'time': time_str }
+                'speed' :round(speed, 2),
+                'time': time_str,
+                'elevation': str(alt),
+                'azimuth': str(az),
+                'distance': distance.km,
+                'ra': str(ra),
+                'dec': str(dec), }
     return position
 
 def data_over_time(TLE, minutes_to_project=94):
