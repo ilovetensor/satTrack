@@ -15,7 +15,7 @@ def data(request, norad_id):
     satellite = Satellite.objects.get(pk=norad_id)
     TLE = satellite.tle
     save_dict = convert(TLE)
-        # request.is_ajax() is deprecated since django 3.1
+
     is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
 
     if is_ajax:
@@ -31,19 +31,18 @@ def data(request, norad_id):
         
     else:
         context = {'data': save_dict}
-        
         return render(request, 'data.html', context)
 
 
 def data_buffer(request, norad_id):
     satellite = Satellite.objects.get(pk=norad_id)
     TLE = satellite.tle
-        # request.is_ajax() is deprecated since django 3.1
-    is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+    period = convert(TLE)['period']
 
+    is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
     if is_ajax:
         
-        time_scale_pos = data_over_time(TLE, 120)
+        time_scale_pos = data_over_time(TLE, period)
     
         if request.method == 'GET':
             return JsonResponse({'context': time_scale_pos})

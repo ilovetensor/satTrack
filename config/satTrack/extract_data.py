@@ -8,6 +8,41 @@ import matplotlib.pyplot as plt
 import math
 import requests
 
+
+
+a = 6378137.0;         # WGS-84 Earth semimajor axis (m)
+
+b = 6356752.314245;     # Derived Earth semiminor axis (m)
+f = (a - b) / a;           # Ellipsoid Flatness
+f_inv = 1.0 / f;       # Inverse flattening
+
+# f_inv = 298.257223563; // WGS-84 Flattening Factor of the Earth 
+# b = a - a / f_inv;
+# f = 1.0 / f_inv;
+
+a_sq = a * a;
+b_sq = b * b;
+e_sq = f * (2 - f);    # Square of Eccentricity
+
+
+def EcefToGeodetic(x, y, z):
+    eps = e_sq / (1.0 - e_sq);
+    p = math.sqrt(x * x + y * y);
+    q = math.atan2((z * a), (p * b));
+    sin_q = math.sin(q);
+    cos_q = math.cos(q);
+    sin_q_3 = sin_q * sin_q * sin_q;
+    cos_q_3 = cos_q * cos_q * cos_q;
+    phi = math.atan2((z + eps * b * sin_q_3), (p - e_sq * a * cos_q_3));
+    ld = math.atan2(y, x);
+    v = a / math.sqrt(1.0 - e_sq * math.sin(phi) * math.sin(phi));
+    h = (p / math.cos(phi)) - v;
+
+    lat = math.degrees(phi);
+    lon = math.degrees(ld);
+    return lat, lon, h
+
+
 api_key = 'M8PZCZ-5ELM7M-DE5LRK-531A'
 API_URL = 'https://api.n2yo.com/rest/v1/satellite/'
 params = {'apiKey': api_key}
@@ -70,6 +105,18 @@ def get_azimuth_altitude_distance_ra_dec(SATELLITE, time, cur_loc):
     ra, dec, distance = topocentric.radec()
     return (alt, az, distance, ra, dec)
 
+def get_geodetic_coordinates(SATELLITE, time):
+    SAT_geo_pos = SATELLITE.at(time).position.m
+    x,y,z = SAT_geo_pos
+    data=[]
+    for i,j,k in zip(x,y,z): 
+        xx, yy, zz = EcefToGeodetic(i, j, k)
+        data.append(yy)
+        data.append(xx)
+        data.append(zz)
+    return data
+
+
 def get_live_data(TLE, cur_loc):
     SATELLITE, ts = load_satellite(TLE)
     time = ts.now()
@@ -97,17 +144,22 @@ def data_over_time(TLE, minutes_to_project=94):
     SATELLITE, ts = load_satellite(TLE)
 
     now = ts.now()
-    minutes = np.arange(now.utc.minute, now.utc.minute + (minutes_to_project), 2)
+    minutes = np.arange(now.utc.minute, now.utc.minute + (minutes_to_project*5), 2)
     time_scale = ts.utc(now.utc.year, now.utc.month, now.utc.day, now.utc.hour, minutes, now.utc.second)
 
+    minutes_batch = np.arange(now.utc.minute, now.utc.minute + (minutes_to_project*1.5), 0.5)
+    time_batch = ts.utc(now.utc.year, now.utc.month, now.utc.day, now.utc.hour, minutes_batch, now.utc.second)
+    
     geocentric = SATELLITE.at(time_scale)
     lat, lon = wgs84.latlon_of(geocentric)
     h = wgs84.height_of(geocentric)
+
+    geodetic = get_geodetic_coordinates(SATELLITE, time_batch)
 
     buffer = {}
     i = 0
     for j,k,l,m in zip(lat.degrees, lon.degrees, h.km, time_scale):
         buffer[i] = {'latitude':j, 'longitude': k, 'height': l, 'iso_string': m.utc_iso()}
         i+=1
-        
+    buffer['geodetic'] = geodetic
     return buffer

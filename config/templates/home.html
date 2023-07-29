@@ -14,7 +14,7 @@
 
   <div class="navbar">
     <ul class="nav-list">
-        <li class="logo"><h2>satTrack 🪨</h1></li>
+        <li class="logo"><h2> <a href="{% url 'list_view' %}">satTrack 🪨</a> </h1></li>
         <li>contact us</li>
         <li>search for satellite</li>
     </ul>
@@ -131,7 +131,7 @@
       const div_data_ra = document.getElementById('ra');
       const div_data_dec = document.getElementById('dec');
       const div_data_speed = document.getElementById('speed');
-      console.log(cur_loc);
+      //console.log(cur_loc);
       $.ajax({
         url: "{% url 'data' satellite.norad_id %}",
         type: "GET",
@@ -207,8 +207,8 @@
 
     // Getting Data Over Time
     const data_readings = get_data_buffer();
-    const len_data = Object.keys(data_readings).length
-
+    const len_data = Object.keys(data_readings).length - 1;
+    console.log(data_readings['geodetic'])
 
 
     // Plotting data using databuffer 
@@ -230,8 +230,35 @@
       availability: new Cesium.TimeIntervalCollection([ new Cesium.TimeInterval({start: start, stop: stop}) ]),
       position: positionsOverTime,
       point: {pixelSize: 30, color: Cesium.Color.YELLOW },
-      path: new Cesium.PathGraphics({ width: 3, color: Cesium.Color.RED})
+      
     });
+
+    const fixedPolyline = Cesium.Cartesian3.fromDegreesArrayHeights(data_readings['geodetic']);
+    const redLine = viewer.entities.add({
+      polyline: {
+        // This callback updates positions each frame.
+        positions: new Cesium.CallbackProperty(function (time, result) {
+          var icrfToFixed = Cesium.Transforms.computeIcrfToFixedMatrix(time);
+          var icrfToFixed = Cesium.Transforms.computeIcrfToFixedMatrix(time);
+          if (Cesium.defined(icrfToFixed)) {
+            let pos=[];
+            for (let i = 0; i < fixedPolyline.length; i++) {
+              let new_point = (Cesium.Matrix3.multiplyByVector(icrfToFixed, fixedPolyline[i], new Cesium.Cartesian3()));
+              var cartographic = Cesium.Cartographic.fromCartesian(new_point);
+              pos = pos.concat(Cesium.Math.toDegrees(cartographic.longitude), Cesium.Math.toDegrees(cartographic.latitude), cartographic.height);
+            }
+              // console.log(pos)
+            return Cesium.Cartesian3.fromDegreesArrayHeights(pos,);
+          }
+        }, false),
+        width: 2,
+        material: new Cesium.PolylineGlowMaterialProperty({
+          glowPower: 2,
+          color: Cesium.Color.YELLOW,
+        }),
+      },
+    });
+
 
     // fetching live data from server 
     const div_data = document.getElementById('data');
@@ -337,6 +364,10 @@ h2{
   position: absolute;
   top: 2px;
   left: 14px;
+}
+.logo a{
+  text-decoration: none;
+  color: white;
 }
 #cesiumContainer{
   background-color: aquamarine;
