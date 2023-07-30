@@ -1,7 +1,8 @@
+config
 numpy
 pandas
 django
 sgp4
 skyfield
 matplotlib
-config
+psycopg2
