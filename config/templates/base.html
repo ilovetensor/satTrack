@@ -14,7 +14,7 @@
 
   <div class="navbar">
     <ul class="nav-list">
-        <li class="logo"><h2>satTrack 🪨</h1></li>
+        <li class="logo"><h2><a href="{% url 'list_view' %}">satTrack 🪨</a></h1></li>
         <li>contact us</li>
         <li>search for satellite</li>
     </ul>
@@ -32,6 +32,10 @@
     li{
       text-decoration: none;
       list-style: none;
+    }
+    .logo a{
+      color: white;
+      text-decoration: none;
     }
     
     h2{

@@ -7,8 +7,31 @@ from .extract_data import convert, get_live_data, data_over_time
 from django.utils import timezone
 from django.views.generic.list import ListView
 
-from .models import Satellite
+from .models import Satellite, Sensor
 
+def search_page(request):
+    model = Satellite
+    return render(request, 'search.html')
+
+
+def search_word(request):
+    
+    is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+    if is_ajax:
+        word = request.GET.get('word', None)
+        sat_list = []
+        id_dict = {}
+        if word:
+            sat_objs = Satellite.objects.filter(name__icontains=word)
+            for sat in sat_objs:
+                id_dict[sat.name] = sat.norad_id
+                # print(id_dict)
+                sat_list.append(sat.name)
+        return JsonResponse({'sat_list': sat_list, 'id_dict': id_dict}, status=200)
+    else: 
+        return 
+
+    
 
 
 def data(request, norad_id):
@@ -59,9 +82,19 @@ class list_view(ListView):
     context_object_name = 'satellite_list'
     template_name = 'satellite_list.html'
 
-def detail_view(request, norad_id):
+def detail_view(request, norad_id, sensor_name):
+    sensor = Sensor.objects.get(name=sensor_name)
     satellite = Satellite.objects.get(pk=norad_id)
     TLE = satellite.tle
     sat_data = convert(TLE)
-    context =  {'satellite': satellite, 'data': sat_data}
+    context =  {'satellite': satellite, 'data': sat_data, 'sensor': sensor}
     return render(request, 'home.html', context)
+
+def sensor_list(request, norad_id):
+    satellite = Satellite.objects.get(pk=norad_id)
+    sensors = satellite.sensors.all()
+
+    context = { 'satellite': satellite ,'sensors': sensors}
+    return render(request, 'sensors.html', context)
+
+
