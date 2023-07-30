@@ -5,4 +5,3 @@ django
 sgp4
 skyfield
 matplotlib
-psycopg2
