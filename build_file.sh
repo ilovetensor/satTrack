@@ -1,6 +1,6 @@
 echo "BUILD START"
-
-pip install -r requirements.txt
+pip install --upgrade
+pip3 install -r requirements.txt
 
 
 echo "BUILD END"
