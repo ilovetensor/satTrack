@@ -4,3 +4,4 @@ django
 sgp4
 skyfield
 matplotlib
+config
