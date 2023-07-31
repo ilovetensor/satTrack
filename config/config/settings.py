@@ -12,9 +12,9 @@ https://docs.djangoproject.com/en/4.1/ref/settings/
 
 from pathlib import Path
 import os
-import dj_database_url
-from dotenv import load_dotenv 
-load_dotenv()
+# import dj_database_url
+# from dotenv import load_dotenv 
+# load_dotenv()
 
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -83,13 +83,13 @@ WSGI_APPLICATION = 'config.wsgi.application'
 import os
 
 
-DATABASES = {'default': dj_database_url.parse(os.environ.get('DATABASE_URL'))}
-# DATABASES = {
-#     'default': {
-#         'ENGINE': 'django.db.backends.sqlite3',
-#         'NAME': os.path.join(BASE_DIR, 'db.sqlite3'),
-#     }
-# }
+# DATABASES = {'default': dj_database_url.parse(os.environ.get('DATABASE_URL'))}
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': os.path.join(BASE_DIR, 'db.sqlite3'),
+    }
+}
 
 # DATABASES['default'] = dj_database_url.config(conn_max_age=600, ssl_require=True)
 
